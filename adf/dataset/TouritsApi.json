@@ -1,0 +1,12 @@
+{
+	"name": "TouritsApi",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "Tourits",
+			"type": "LinkedServiceReference"
+		},
+		"annotations": [],
+		"type": "RestResource",
+		"schema": []
+	}
+}

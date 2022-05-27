@@ -1,0 +1,9 @@
+{
+	"name": "datalake-dev-1418475243",
+	"location": "westus2",
+	"identity": {
+		"type": "SystemAssigned",
+		"principalId": "e09fc506-1a78-4ccb-86cd-90e45fe7ddcf",
+		"tenantId": "72f988bf-86f1-41af-91ab-2d7cd011db47"
+	}
+}

@@ -1,0 +1,12 @@
+{
+	"name": "Tourits",
+	"properties": {
+		"annotations": [],
+		"type": "RestService",
+		"typeProperties": {
+			"url": "http://restapi.adequateshop.com/api/Tourist",
+			"enableServerCertificateValidation": true,
+			"authenticationType": "Anonymous"
+		}
+	}
+}
