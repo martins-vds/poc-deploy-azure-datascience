@@ -1,0 +1,147 @@
+# Azure Databricks Build Pipeline
+# azure-pipelines.yml
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - ./databricks/*
+    exclude:
+      - azure-pipelines*.yml 
+  
+pool:
+  vmImage: ubuntu-latest 
+
+jobs:
+  - job: build_databricks
+    variables:
+      - group: 'contoso-databricks-dev'
+    displayName: Build Databricks
+    steps:
+      - task: UsePythonVersion@0
+        displayName: 'Use Python 3.7'
+        inputs:
+          versionSpec: 3.7
+      
+      - script: |
+          pip install pytest requests setuptools wheel check-wheel-contents
+          pip install -U databricks-connect==6.4.*
+        displayName: 'Load Python Dependencies'
+      
+      - script: |
+          echo "y
+          $(WORKSPACE-REGION-URL)
+          $(CSE-PAT)
+          $(EXISTING-CLUSTER-ID)
+          $(WORKSPACE-ORG-ID)
+          15001" | databricks-connect configure
+        displayName: 'Configure DBConnect'
+      
+      - checkout: self
+        persistCredentials: true
+        clean: true
+      
+      - script: git checkout main
+        displayName: 'Get Latest Branch'
+      
+      - script: |
+          python -m pytest --junit-xml=$(Build.Repository.LocalPath)/logs/TEST-LOCAL.xml
+          $(Build.Repository.LocalPath)/libraries/python/dbxdemo/test*.py || true
+      
+        displayName: 'Run Python Unit Tests for library code'
+      
+      - task: PublishTestResults@2
+        inputs:
+          testResultsFiles: '**/TEST-*.xml'
+          failTaskOnFailedTests: true
+          publishRunAttachments: true
+      
+      - script: |
+          cd $(Build.Repository.LocalPath)/libraries/python/dbxdemo
+          python3 setup.py sdist bdist_wheel
+          ls dist/
+        displayName: 'Build Python Wheel for Libs'
+      
+      - script: |
+          git diff --name-only --diff-filter=AMR HEAD^1 HEAD | xargs -I '{}' cp --parents -r '{}' $(Build.BinariesDirectory)
+      
+          mkdir -p $(Build.BinariesDirectory)/libraries/python/libs
+          cp $(Build.Repository.LocalPath)/libraries/python/dbxdemo/dist/*.* $(Build.BinariesDirectory)/libraries/python/libs
+      
+          mkdir -p $(Build.BinariesDirectory)/scripts
+          cp $(Build.Repository.LocalPath)/scripts/*.* $(Build.BinariesDirectory)/scripts
+      
+        displayName: 'Get Changes'
+      
+      - publish: $(Build.BinariesDirectory)
+        displayName: 'Publish Build Artifact'
+        artifact: 'DatabricksBuild'
+      
+  - deployment: deploy_databricks_stg
+    displayName: 'Deploy Databricks to STG'
+    variables:
+      - group: 'contoso-databricks-stg'
+    environment: 'contoso-databricks-stg'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+            - download: current
+              artifact: 'DatabricksBuild'
+              
+            - task: UsePythonVersion@0
+              displayName: 'Use Python 3.7'
+              inputs:
+                versionSpec: 3.7
+
+            - task: databricksDeployScripts@0
+              displayName: 'Deploy Notebooks'
+              inputs:
+                authMethod: 'bearer'
+                bearerToken: '$(CSE-PAT)'
+                region: '$(WORKSPACE-REGION)'
+                localPath: '$(Pipeline.Workspace)/DatabricksBuild/notebooks'
+                databricksPath: '/Shared'
+            
+            - task: databricksDeployDBFSFilesTask@0
+              displayName: 'Deploy DBFS Files'
+              inputs:
+                authMethod: 'bearer'
+                bearerToken: '$(CSE-PAT)'
+                region: '$(WORKSPACE-REGION)'
+                LocalRootFolder: '$(Pipeline.Workspace)/DatabricksBuild/libraries/python/libs'
+                FilePattern: '*.*'
+                TargetLocation: '/libs'
+            
+            - task: PythonScript@0
+              displayName: 'Install WHL Libraries'
+              inputs:
+                scriptSource: 'filePath'
+                scriptPath: '$(Pipeline.Workspace)/DatabricksBuild/scripts/installWhlLibrary.py'
+                arguments: '--shard=$(WORKSPACE-REGION-URL) --token=$(CSE-PAT) --cluster-id=$(EXISTING-CLUSTER-ID) --libs=$(Pipeline.Workspace\DatabricksBuild\libraries\python\libs --dbfspath=$(DBFSPATH)'
+            
+            - script: |
+                mkdir $(Pipeline.Workspace)/DatabricksBuild/logs/json
+                mkdir $(Pipeline.Workspace)/DatabricksBuild/logs/xml
+                pip install pytest requests
+              displayName: 'Install Test libraries'
+            
+            - task: PythonScript@0
+              displayName: 'Execute Notebook'
+              inputs:
+                scriptSource: 'filePath'
+                scriptPath: '$(Pipeline.Workspace)/DatabricksBuild/scripts/executenotebook.py'
+                arguments: '--shard=$(WORKSPACE-REGION-URL) --token=$(CSE-PAT) --cluster-id=$(EXISTING-CLUSTER-ID) --localpath=$(Pipeline.Workspace)/DatabricksBuild/notebooks/tests --workspacepath /Shared/notebooks/tests --outfilepath $(Pipeline.Workspace)/DatabricksBuild/logs/json'
+          
+            - script: |
+                python -m pytest --junit-xml=$(Pipeline.Workspace)/DatabricksBuild/logs/xml/TEST-notebookout.xml --jsonpath=$(Pipeline.Workspace)/DatabricksBuild/logs/json $(Pipeline.Workspace)/DatabricksBuild/scripts/evaluatenotebookruns.py || true
+              displayName: 'Test Notebooks'
+            
+            - task: PublishTestResults@2
+              displayName: 'Publish Test Results'
+              inputs:
+                testResultsFormat: 'JUnit'
+                testResultsFiles: '**/TEST-*.xml'
+      

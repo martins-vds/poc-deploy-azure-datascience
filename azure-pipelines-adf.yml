@@ -2,15 +2,22 @@ pool:
   vmImage: ubuntu-latest
 
 trigger:
-  - main
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - ./adf/*
+    exclude:
+      - azure-pipelines*.yml
 
 variables:
   - name: adfDevSubscription
-    value: '<SUBSCRIPTION-ID>'
+    value: '7806cf8d-3992-4f6a-ab99-e493a143ad1b'
   - name: adfDevResourceGroup
-    value: '<RESOURCE-GROUP-NAME>'
+    value: 'poc-cicd-azure-datalake'
   - name: adfDevFactoryName
-    value: '<DEV-ADF-NAME>'
+    value: 'datalake-dev-1418475243'
 
 stages:
   - stage: build_arm_templates
@@ -37,10 +44,10 @@ stages:
     dependsOn: build_arm_templates
     displayName: 'Deploy ADF QA'
     variables:
-      - group: 'adf-qa'
+      - group: 'contoso-adf-qa'
     jobs:
       - deployment: deploy_adf_qa
-        environment: adf-qa
+        environment: contoso-adf-qa
         strategy:
           runOnce:
             deploy:
@@ -50,11 +57,11 @@ stages:
                 - task: AzureResourceManagerTemplateDeployment@3
                   inputs:
                     deploymentScope: 'Resource Group'
-                    azureResourceManagerConnection: '<QA-SERVICE-CONNECTION-NAME>'
-                    subscriptionId: '<QA-SUBSCRIPTION-ID>'
+                    azureResourceManagerConnection: 'Azure Internal (7806cf8d-3992-4f6a-ab99-e493a143ad1b)'
+                    subscriptionId: '7806cf8d-3992-4f6a-ab99-e493a143ad1b'
                     action: 'Create Or Update Resource Group'
-                    resourceGroupName: '<QA-RESOURCE-GROUP-NAME>'
-                    location: '<REGION>'
+                    resourceGroupName: 'poc-cicd-azure-datalake'
+                    location: 'West US 2'
                     templateLocation: 'Linked artifact'
                     csmFile: '$(Pipeline.Workspace)/ArmTemplates/ARMTemplateForFactory.json'
                     csmParametersFile: '$(Pipeline.Workspace)/ArmTemplates/ARMTemplateParametersForFactory.json'
@@ -64,10 +71,10 @@ stages:
     dependsOn: deploy_adf_qa
     displayName: 'Deploy ADF Prod'
     variables:
-      - group: 'adf-prod'
+      - group: 'contoso-adf-prod'
     jobs:
       - deployment: deploy_adf_prod
-        environment: adf-prod
+        environment: contoso-adf-prod
         strategy:
           runOnce:
             deploy:
@@ -77,11 +84,11 @@ stages:
                 - task: AzureResourceManagerTemplateDeployment@3
                   inputs:
                     deploymentScope: 'Resource Group'
-                    azureResourceManagerConnection: '<PROD-SERVICE-CONNECTION-NAME>'
-                    subscriptionId: '<PROD-SUBSCRIPTION-ID>'
+                    azureResourceManagerConnection: 'Azure Internal (7806cf8d-3992-4f6a-ab99-e493a143ad1b)'
+                    subscriptionId: '7806cf8d-3992-4f6a-ab99-e493a143ad1b'
                     action: 'Create Or Update Resource Group'
-                    resourceGroupName: '<PROD-RESOURCE-GROUP-NAME>'
-                    location: '<REGION>'
+                    resourceGroupName: 'poc-cicd-azure-datalake'
+                    location: 'West US 2'
                     templateLocation: 'Linked artifact'
                     csmFile: '$(Pipeline.Workspace)/ArmTemplates/ARMTemplateForFactory.json'
                     csmParametersFile: '$(Pipeline.Workspace)/ArmTemplates/ARMTemplateParametersForFactory.json'
