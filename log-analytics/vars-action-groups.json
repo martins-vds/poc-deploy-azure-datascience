@@ -1,0 +1,7 @@
+[
+    {
+      "subscriptionId" : "<ACTION RULE SUBSCRIPTION ID>",
+      "resourceGroup": "<ACTION RULE RESOURCE GROUP>",
+      "actionGroup": "<ACTION GROUP NAME>"
+    }
+  ]

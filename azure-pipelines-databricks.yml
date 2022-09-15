@@ -48,7 +48,7 @@ jobs:
       
       - script: |
           python -m pytest --junit-xml=$(Build.Repository.LocalPath)/logs/TEST-LOCAL.xml
-          $(Build.Repository.LocalPath)/libraries/python/dbxdemo/test*.py || true
+          $(Build.Repository.LocalPath)/databricks/libraries/python/dbxdemo/test*.py || true
       
         displayName: 'Run Python Unit Tests for library code'
       
@@ -59,7 +59,7 @@ jobs:
           publishRunAttachments: true
       
       - script: |
-          cd $(Build.Repository.LocalPath)/libraries/python/dbxdemo
+          cd $(Build.Repository.LocalPath)/databricks/libraries/python/dbxdemo
           python3 setup.py sdist bdist_wheel
           ls dist/
         displayName: 'Build Python Wheel for Libs'
@@ -67,11 +67,11 @@ jobs:
       - script: |
           git diff --name-only --diff-filter=AMR HEAD^1 HEAD | xargs -I '{}' cp --parents -r '{}' $(Build.BinariesDirectory)
       
-          mkdir -p $(Build.BinariesDirectory)/libraries/python/libs
-          cp $(Build.Repository.LocalPath)/libraries/python/dbxdemo/dist/*.* $(Build.BinariesDirectory)/libraries/python/libs
+          mkdir -p $(Build.BinariesDirectory)/databricks/libraries/python/libs
+          cp $(Build.Repository.LocalPath)/databricks/libraries/python/dbxdemo/dist/*.* $(Build.BinariesDirectory)/databricks/libraries/python/libs
       
-          mkdir -p $(Build.BinariesDirectory)/scripts
-          cp $(Build.Repository.LocalPath)/scripts/*.* $(Build.BinariesDirectory)/scripts
+          mkdir -p $(Build.BinariesDirectory)/databricks/scripts
+          cp $(Build.Repository.LocalPath)/databricks/scripts/*.* $(Build.BinariesDirectory)/databricks/scripts
       
         displayName: 'Get Changes'
       
@@ -102,7 +102,7 @@ jobs:
                 authMethod: 'bearer'
                 bearerToken: '$(CSE-PAT)'
                 region: '$(WORKSPACE-REGION)'
-                localPath: '$(Pipeline.Workspace)/DatabricksBuild/notebooks'
+                localPath: '$(Pipeline.Workspace)/DatabricksBuild/databricks/notebooks'
                 databricksPath: '/Shared'
             
             - task: databricksDeployDBFSFilesTask@0
@@ -111,7 +111,7 @@ jobs:
                 authMethod: 'bearer'
                 bearerToken: '$(CSE-PAT)'
                 region: '$(WORKSPACE-REGION)'
-                LocalRootFolder: '$(Pipeline.Workspace)/DatabricksBuild/libraries/python/libs'
+                LocalRootFolder: '$(Pipeline.Workspace)/DatabricksBuild/databricks/libraries/python/libs'
                 FilePattern: '*.*'
                 TargetLocation: '/libs'
             
@@ -119,12 +119,12 @@ jobs:
               displayName: 'Install WHL Libraries'
               inputs:
                 scriptSource: 'filePath'
-                scriptPath: '$(Pipeline.Workspace)/DatabricksBuild/scripts/installWhlLibrary.py'
+                scriptPath: '$(Pipeline.Workspace)/DatabricksBuild/databricks/scripts/installWhlLibrary.py'
                 arguments: '--shard=$(WORKSPACE-REGION-URL) --token=$(CSE-PAT) --cluster-id=$(EXISTING-CLUSTER-ID) --libs=$(Pipeline.Workspace\DatabricksBuild\libraries\python\libs --dbfspath=$(DBFSPATH)'
             
             - script: |
-                mkdir $(Pipeline.Workspace)/DatabricksBuild/logs/json
-                mkdir $(Pipeline.Workspace)/DatabricksBuild/logs/xml
+                mkdir $(Pipeline.Workspace)/DatabricksBuild/databricks/logs/json
+                mkdir $(Pipeline.Workspace)/DatabricksBuild/databricks/logs/xml
                 pip install pytest requests
               displayName: 'Install Test libraries'
             
@@ -132,11 +132,11 @@ jobs:
               displayName: 'Execute Notebook'
               inputs:
                 scriptSource: 'filePath'
-                scriptPath: '$(Pipeline.Workspace)/DatabricksBuild/scripts/executenotebook.py'
-                arguments: '--shard=$(WORKSPACE-REGION-URL) --token=$(CSE-PAT) --cluster-id=$(EXISTING-CLUSTER-ID) --localpath=$(Pipeline.Workspace)/DatabricksBuild/notebooks/tests --workspacepath /Shared/notebooks/tests --outfilepath $(Pipeline.Workspace)/DatabricksBuild/logs/json'
+                scriptPath: '$(Pipeline.Workspace)/DatabricksBuild/databricks/scripts/executenotebook.py'
+                arguments: '--shard=$(WORKSPACE-REGION-URL) --token=$(CSE-PAT) --cluster-id=$(EXISTING-CLUSTER-ID) --localpath=$(Pipeline.Workspace)/DatabricksBuild/databricks/notebooks/tests --workspacepath /Shared/notebooks/tests --outfilepath $(Pipeline.Workspace)/DatabricksBuild/databricks/logs/json'
           
             - script: |
-                python -m pytest --junit-xml=$(Pipeline.Workspace)/DatabricksBuild/logs/xml/TEST-notebookout.xml --jsonpath=$(Pipeline.Workspace)/DatabricksBuild/logs/json $(Pipeline.Workspace)/DatabricksBuild/scripts/evaluatenotebookruns.py || true
+                python -m pytest --junit-xml=$(Pipeline.Workspace)/DatabricksBuild/databricks/logs/xml/TEST-notebookout.xml --jsonpath=$(Pipeline.Workspace)/DatabricksBuild/databricks/logs/json $(Pipeline.Workspace)/DatabricksBuild/databricks/scripts/evaluatenotebookruns.py || true
               displayName: 'Test Notebooks'
             
             - task: PublishTestResults@2

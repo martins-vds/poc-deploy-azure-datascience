@@ -1,0 +1,67 @@
+name: $(BuildDefinitionName)_$(date:yyyyMMdd)$(rev:.r)
+
+pr: none
+
+variables:
+  azureServiceConnection: '<SERVICE CONNECTION NAME>'
+  resourceGroup: '<RESOURCE GROUP>'
+  scheduledQueryName: '<QUERY NAME>'
+  workspaceName: '<LOG ANALYTICS WORKSPACE>'
+  workspaceSubscriptionId: '<LOG ANALYTICS SUBSCRIPTION ID>'
+  workspaceResourceGroup: '<LOG ANALYTICS RESOURCE GROUP>'
+  templateFile: $(System.DefaultWorkingDirectory)/log-analytics/log-analytics-rules.bicep
+
+stages :
+  - stage: build-stage
+    displayName: Validate Template
+    jobs:
+    - job: validate
+      steps:
+      - task: Bash@3
+        displayName: 'Bicep Build'
+        inputs:
+          targetType: inline
+          script: |
+            az bicep build --file $(templateFile) --outfile $(Agent.TempDirectory)/log-analytics-rules.json
+      - publish: $(Agent.TempDirectory)/log-analytics-rules.json
+        artifact: ARMTemplate
+  - stage: deploy-stage
+    displayName: Deploy Log Analytics
+    dependsOn: [build-stage]
+    jobs:
+      - job: deploy
+        steps:
+          - download: current
+            artifact: ARMTemplate
+          - task: AzureCLI@2
+            displayName: 'Test Log Analytics Template'
+            inputs:
+              azureSubscription: $(azureServiceConnection)
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                #!/bin/bash
+                az deployment group create --template-file $(Pipeline.Workspace)/log-analytics-rules.json \
+                                           --resource-group $(resourceGroup) \
+                                           --parameters scheduledQueryName=$(scheduledQueryName) \
+                                                        workspaceName=$(workspaceName) \
+                                                        workspaceSubscriptionId=$(workspaceSubscriptionId) \
+                                                        workspaceResourceGroup=$(workspaceResourceGroup) \
+                                           --what-if
+              addSpnToEnvironment: true
+          - task: AzureCLI@2
+            displayName: 'Deploy Log Analytics Template'
+            inputs:
+              azureSubscription: $(azureServiceConnection)
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                #!/bin/bash
+                az deployment group create --template-file $(Pipeline.Workspace)/log-analytics-rules.json \
+                                           --resource-group $(resourceGroup) \
+                                           --parameters scheduledQueryName=$(scheduledQueryName) \
+                                                        workspaceName=$(workspaceName) \
+                                                        workspaceSubscriptionId=$(workspaceSubscriptionId) \
+                                                        workspaceResourceGroup=$(workspaceResourceGroup) \
+                                           --name $(BuildDefinitionName)-$(date:yyyyMMdd)$(rev:.r)
+              addSpnToEnvironment: true
